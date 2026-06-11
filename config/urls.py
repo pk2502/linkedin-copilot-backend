@@ -9,6 +9,8 @@ urlpatterns = [
     path("api/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
+    path("api/auth/social/", include("accounts.social_urls")),
+
     path("api/generate/", include("ai.urls")),
     path("api/history/", include("generations.urls")),
 ]
