@@ -11,6 +11,9 @@ urlpatterns = [
 
     path("api/auth/social/", include("accounts.social_urls")),
 
+    # allauth URLs (required internally)
+    path("accounts/", include("allauth.urls")),
+
     path("api/generate/", include("ai.urls")),
     path("api/history/", include("generations.urls")),
 ]
