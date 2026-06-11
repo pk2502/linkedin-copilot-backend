@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from generations.models import Generation
+from config.throttles import GenerateRateThrottle
 from ai.services import (
     generate_connection_request,
     generate_referral_request,
@@ -30,6 +31,7 @@ def get_tone(request):
 
 class GenerateConnectionRequestView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         message = generate_connection_request(
@@ -48,6 +50,7 @@ class GenerateConnectionRequestView(APIView):
 
 class GenerateReferralRequestView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         message = generate_referral_request(
@@ -68,6 +71,7 @@ class GenerateReferralRequestView(APIView):
 
 class GenerateRecruiterReplyView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         message = generate_recruiter_reply(
@@ -88,6 +92,7 @@ class GenerateRecruiterReplyView(APIView):
 
 class GenerateFollowupView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         message = generate_followup(
@@ -131,6 +136,7 @@ def _sse_stream(generator, user, generation_type, input_data):
 
 class StreamConnectionRequestView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         generator = stream_connection_request(
@@ -145,6 +151,7 @@ class StreamConnectionRequestView(APIView):
 
 class StreamReferralRequestView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         generator = stream_referral_request(
@@ -161,6 +168,7 @@ class StreamReferralRequestView(APIView):
 
 class StreamRecruiterReplyView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         generator = stream_recruiter_reply(
@@ -177,6 +185,7 @@ class StreamRecruiterReplyView(APIView):
 
 class StreamFollowupView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
 
     def post(self, request):
         generator = stream_followup(

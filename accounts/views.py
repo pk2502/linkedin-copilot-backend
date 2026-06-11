@@ -3,11 +3,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
+from config.throttles import AuthRateThrottle
 
 from accounts.serializers import RegisterSerializer, UserSerializer
 
 
 class RegisterView(APIView):
+    throttle_classes = [AuthRateThrottle]
+
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
