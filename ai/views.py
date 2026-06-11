@@ -21,6 +21,11 @@ def get_sender_name(user):
     return full or user.username
 
 
+def get_tone(request):
+    tone = request.data.get("tone", "friendly")
+    return tone if tone in ("formal", "friendly", "concise") else "friendly"
+
+
 # --- Non-streaming views ---
 
 class GenerateConnectionRequestView(APIView):
@@ -32,6 +37,7 @@ class GenerateConnectionRequestView(APIView):
             company=request.data.get("company"),
             role=request.data.get("role"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         Generation.objects.create(
             user=request.user, generation_type="connection_request",
@@ -51,6 +57,7 @@ class GenerateReferralRequestView(APIView):
             job_title=request.data.get("job_title"),
             your_background=request.data.get("your_background"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         Generation.objects.create(
             user=request.user, generation_type="referral_request",
@@ -70,6 +77,7 @@ class GenerateRecruiterReplyView(APIView):
             your_background=request.data.get("your_background"),
             interest_level=request.data.get("interest_level"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         Generation.objects.create(
             user=request.user, generation_type="recruiter_reply",
@@ -89,6 +97,7 @@ class GenerateFollowupView(APIView):
             context=request.data.get("context"),
             days_since=request.data.get("days_since"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         Generation.objects.create(
             user=request.user, generation_type="followup",
@@ -129,6 +138,7 @@ class StreamConnectionRequestView(APIView):
             company=request.data.get("company"),
             role=request.data.get("role"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         return _sse_stream(generator, request.user, "connection_request", request.data)
 
@@ -144,6 +154,7 @@ class StreamReferralRequestView(APIView):
             job_title=request.data.get("job_title"),
             your_background=request.data.get("your_background"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         return _sse_stream(generator, request.user, "referral_request", request.data)
 
@@ -159,6 +170,7 @@ class StreamRecruiterReplyView(APIView):
             your_background=request.data.get("your_background"),
             interest_level=request.data.get("interest_level"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         return _sse_stream(generator, request.user, "recruiter_reply", request.data)
 
@@ -174,5 +186,6 @@ class StreamFollowupView(APIView):
             context=request.data.get("context"),
             days_since=request.data.get("days_since"),
             sender_name=get_sender_name(request.user),
+            tone=get_tone(request),
         )
         return _sse_stream(generator, request.user, "followup", request.data)
