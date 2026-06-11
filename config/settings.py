@@ -18,8 +18,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
 
     'rest_framework',
+    'rest_framework.authtoken',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
 
@@ -138,7 +140,6 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 
-# dj-rest-auth returns JWT
 REST_AUTH = {
     'USE_JWT': True,
     'JWT_AUTH_COOKIE': None,
