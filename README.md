@@ -47,7 +47,18 @@ python manage.py makemigrations --check --dry-run
 python manage.py test
 ```
 
-Tests never call the real Groq API.
+Tests never call the real Groq API: generation tests replace the client with a fake and fail if a real one is constructed.
+
+The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django creates and drops a temporary `test_<DB_NAME>` database, so the database user needs the `CREATEDB` privilege. A guard test fails if the backend is not PostgreSQL.
+
+| Area | File |
+| --- | --- |
+| Settings hardening, health, routing | `config/tests.py` |
+| Register, login, refresh rotation and blacklisting, `/me` | `accounts/tests.py` |
+| Sync and streaming generation, prompts, tone, auth, throttling | `ai/tests.py` |
+| History list, search, delete, per-user isolation | `generations/tests.py` |
+
+`test_missing_required_fields_are_rejected` is marked as an expected failure: the generation endpoints do not validate input yet.
 
 ## Dependencies
 
