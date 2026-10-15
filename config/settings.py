@@ -199,7 +199,14 @@ def _production_database_config():
     return database_config
 
 
-ENVIRONMENT = os.environ.get('DJANGO_ENV', 'development').strip().lower()
+# DJANGO_ENV has no default: a deployed server that forgets to set it must fail
+# at startup instead of silently running with development settings.
+ENVIRONMENT = os.environ.get('DJANGO_ENV', '').strip().lower()
+if not ENVIRONMENT:
+    raise ImproperlyConfigured(
+        "DJANGO_ENV is not set. Set DJANGO_ENV=development for local work "
+        "(see .env.example) or DJANGO_ENV=production on the server."
+    )
 VALID_ENVIRONMENTS = {'development', 'production'}
 if ENVIRONMENT not in VALID_ENVIRONMENTS:
     raise ImproperlyConfigured("DJANGO_ENV must be set to either 'development' or 'production'.")

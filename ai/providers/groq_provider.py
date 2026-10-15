@@ -2,7 +2,22 @@ import os
 from groq import Groq
 from typing import Generator
 
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+_client = None
+
+
+def _get_client() -> Groq:
+    """Create the Groq client on first use.
+
+    Building it at import time made every module that imports the URL conf
+    (health check, tests, management commands) fail when GROQ_API_KEY was
+    absent. Production still requires the key at startup via settings.
+    """
+    global _client
+    if _client is None:
+        _client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    return _client
+
+
 MODEL = "llama-3.3-70b-versatile"
 
 TONE_INSTRUCTIONS = {
@@ -18,7 +33,7 @@ def _get_tone_line(tone: str) -> str:
 
 
 def _chat(prompt: str) -> str:
-    response = client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=1024,
@@ -27,7 +42,7 @@ def _chat(prompt: str) -> str:
 
 
 def _stream_chat(prompt: str) -> Generator[str, None, None]:
-    stream = client.chat.completions.create(
+    stream = _get_client().chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=1024,

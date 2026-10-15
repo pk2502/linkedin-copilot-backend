@@ -42,6 +42,12 @@ class ProductionSettingsHardeningTests(SimpleTestCase):
                 DB_HOST="db.example.com",
             )
 
+    def test_missing_environment_name_raises_improperly_configured(self):
+        for value in ("", "   "):
+            with self.subTest(DJANGO_ENV=value):
+                with self.assertRaises(ImproperlyConfigured):
+                    self._reload_settings(DJANGO_ENV=value)
+
     def test_missing_production_secret_raises_improperly_configured(self):
         with self.assertRaises(ImproperlyConfigured):
             self._reload_settings(
