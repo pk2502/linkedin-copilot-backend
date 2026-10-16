@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from rest_framework import status
@@ -147,3 +149,34 @@ class MeTests(AuthTestCase):
             response.data,
             {"id": self.user.id, "username": "alice", "email": "alice@example.com"},
         )
+
+
+class GoogleLoginTokenTests(AuthTestCase):
+    GOOGLE_URL = "/api/auth/social/google/"
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="googler", email="g@example.com")
+        # Skip the OAuth code exchange with Google; it is not under test.
+        patcher = mock.patch(
+            "dj_rest_auth.registration.serializers.SocialLoginSerializer.validate",
+            lambda serializer, attrs: {"user": self.user},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_google_login_returns_access_and_refresh_tokens(self):
+        response = self.client.post(self.GOOGLE_URL, {"code": "fake-code"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get("access"))
+        # Without a refresh token Google users were logged out after 30 minutes.
+        self.assertTrue(response.data.get("refresh"))
+
+    def test_refresh_token_from_google_login_can_be_rotated(self):
+        login = self.client.post(self.GOOGLE_URL, {"code": "fake-code"}, format="json")
+
+        response = self.client.post(REFRESH_URL, {"refresh": login.data["refresh"]}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)

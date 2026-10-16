@@ -398,4 +398,8 @@ REST_AUTH = {
     'USE_JWT': True,
     'JWT_AUTH_COOKIE': None,
     'JWT_AUTH_REFRESH_COOKIE': None,
+    # Return the refresh token in the response body (as /api/auth/login/ does).
+    # dj-rest-auth defaults to True, which strips it from the Google login
+    # response and forced Google users to sign in again every 30 minutes.
+    'JWT_AUTH_HTTPONLY': False,
 }
