@@ -268,3 +268,72 @@ class GenerationAuthAndThrottleTests(GenerationAPITestCase):
         self.assertEqual(blocked_stream.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertEqual(len(self.fake.calls), 20)
         self.assertEqual(Generation.objects.count(), 20)
+
+
+class GroqRequestOptionsTests(GenerationAPITestCase):
+    def test_sync_request_uses_default_model_and_hides_reasoning(self):
+        spec = GENERATORS["connection_request"]
+
+        self.client.post(self.sync_url(spec["slug"]), spec["payload"], format="json")
+
+        call = self.fake.calls[-1]
+        self.assertEqual(call["model"], "openai/gpt-oss-120b")
+        self.assertEqual(call["reasoning_effort"], "low")
+        self.assertIs(call["include_reasoning"], False)
+        self.assertEqual(call["max_completion_tokens"], groq_provider.MAX_COMPLETION_TOKENS)
+        self.assertNotIn("max_tokens", call)
+
+    def test_stream_request_uses_same_options_with_stream_enabled(self):
+        spec = GENERATORS["followup"]
+
+        response = self.client.post(self.stream_url(spec["slug"]), spec["payload"], format="json")
+        b"".join(response.streaming_content)
+
+        call = self.fake.calls[-1]
+        self.assertTrue(call["stream"])
+        self.assertEqual(call["model"], "openai/gpt-oss-120b")
+        self.assertIs(call["include_reasoning"], False)
+
+    def test_groq_model_environment_variable_overrides_default(self):
+        spec = GENERATORS["connection_request"]
+        with mock.patch.dict("os.environ", {"GROQ_MODEL": "qwen/qwen3.8-27b"}):
+            self.client.post(self.sync_url(spec["slug"]), spec["payload"], format="json")
+
+        call = self.fake.calls[-1]
+        self.assertEqual(call["model"], "qwen/qwen3.8-27b")
+        # gpt-oss-specific reasoning options are not sent to other models.
+        self.assertNotIn("reasoning_effort", call)
+        self.assertNotIn("include_reasoning", call)
+
+    def test_stream_skips_chunks_without_choices_and_reasoning_only_chunks(self):
+        def create(**kwargs):
+            self.fake.calls.append(kwargs)
+            return iter([
+                SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=None))]),
+                SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hello"))]),
+                SimpleNamespace(choices=[]),
+            ])
+
+        self.fake.chat.completions.create = create
+        spec = GENERATORS["connection_request"]
+
+        response = self.client.post(self.stream_url(spec["slug"]), spec["payload"], format="json")
+        body = b"".join(response.streaming_content).decode()
+
+        self.assertIn('"chunk": "Hello"', body)
+        self.assertTrue(body.endswith("data: [DONE]\n\n"))
+        self.assertEqual(Generation.objects.get().output, "Hello")
+
+    def test_sync_reply_with_empty_content_returns_empty_message(self):
+        def create(**kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=None))]
+            )
+
+        self.fake.chat.completions.create = create
+        spec = GENERATORS["connection_request"]
+
+        response = self.client.post(self.sync_url(spec["slug"]), spec["payload"], format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"message": ""})

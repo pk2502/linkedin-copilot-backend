@@ -18,7 +18,29 @@ def _get_client() -> Groq:
     return _client
 
 
-MODEL = "llama-3.3-70b-versatile"
+# llama-3.3-70b-versatile was shut down by Groq on 2026-08-16. Override with the
+# GROQ_MODEL environment variable when Groq retires or replaces this model.
+DEFAULT_MODEL = "openai/gpt-oss-120b"
+MAX_COMPLETION_TOKENS = 1024
+
+
+def _model() -> str:
+    return os.environ.get("GROQ_MODEL", "").strip() or DEFAULT_MODEL
+
+
+def _completion_options(prompt: str) -> dict:
+    model = _model()
+    options = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_completion_tokens": MAX_COMPLETION_TOKENS,
+    }
+    if model.startswith("openai/gpt-oss"):
+        # Short outreach messages need little reasoning; keep the model's
+        # reasoning out of the reply and out of the SSE stream.
+        options["reasoning_effort"] = "low"
+        options["include_reasoning"] = False
+    return options
 
 TONE_INSTRUCTIONS = {
     "formal": "Use a formal, professional tone. Structured sentences, no contractions.",
@@ -33,22 +55,17 @@ def _get_tone_line(tone: str) -> str:
 
 
 def _chat(prompt: str) -> str:
-    response = _get_client().chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1024,
-    )
-    return response.choices[0].message.content.strip()
+    response = _get_client().chat.completions.create(**_completion_options(prompt))
+    return (response.choices[0].message.content or "").strip()
 
 
 def _stream_chat(prompt: str) -> Generator[str, None, None]:
     stream = _get_client().chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1024,
-        stream=True,
+        **_completion_options(prompt), stream=True
     )
     for chunk in stream:
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta
