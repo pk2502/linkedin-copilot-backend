@@ -10,6 +10,7 @@ REGISTER_URL = "/api/auth/register/"
 LOGIN_URL = "/api/auth/login/"
 REFRESH_URL = "/api/auth/refresh/"
 ME_URL = "/api/auth/me/"
+LOGOUT_URL = "/api/auth/logout/"
 
 PASSWORD = "correct-horse-battery-staple"
 
@@ -224,3 +225,52 @@ class ExtensionTokenTests(AuthTestCase):
         # Rotating (and blacklisting) the extension token leaves the web session working.
         self.assertEqual(rotated.status_code, status.HTTP_200_OK)
         self.assertEqual(web.status_code, status.HTTP_200_OK)
+
+
+class LogoutTests(AuthTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="alice", password=PASSWORD)
+        self.refresh = RefreshToken.for_user(self.user)
+
+    def test_logout_revokes_the_refresh_token(self):
+        response = self.client.post(LOGOUT_URL, {"refresh": str(self.refresh)}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        refreshed = self.client.post(REFRESH_URL, {"refresh": str(self.refresh)}, format="json")
+        self.assertEqual(refreshed.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_works_with_an_expired_access_token_header(self):
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer not-a-valid-token")
+
+        response = self.client.post(LOGOUT_URL, {"refresh": str(self.refresh)}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_missing_refresh_token_is_rejected(self):
+        response = self.client.post(LOGOUT_URL, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_or_already_revoked_token_is_rejected(self):
+        self.client.post(LOGOUT_URL, {"refresh": str(self.refresh)}, format="json")
+        for token in ("garbage", str(self.refresh)):
+            with self.subTest(token=token[:10]):
+                response = self.client.post(LOGOUT_URL, {"refresh": token}, format="json")
+                self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logging_out_one_session_keeps_the_other(self):
+        extension = RefreshToken.for_user(self.user)
+
+        self.client.post(LOGOUT_URL, {"refresh": str(extension)}, format="json")
+
+        web = self.client.post(REFRESH_URL, {"refresh": str(self.refresh)}, format="json")
+        self.assertEqual(web.status_code, status.HTTP_200_OK)
+
+    def test_logout_does_not_use_the_login_budget(self):
+        for _ in range(12):
+            self.client.post(LOGOUT_URL, {"refresh": "garbage"}, format="json")
+
+        login = self.client.post(LOGIN_URL, {"username": "alice", "password": PASSWORD}, format="json")
+
+        self.assertEqual(login.status_code, status.HTTP_200_OK)

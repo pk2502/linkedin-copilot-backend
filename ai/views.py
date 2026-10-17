@@ -1,10 +1,19 @@
 import json
+import logging
+
 from django.http import StreamingHttpResponse
-from rest_framework.views import APIView
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from generations.models import Generation
-from config.throttles import GenerateRateThrottle
+from rest_framework.views import APIView
+
+from ai.serializers import (
+    DEFAULT_TONE,
+    ConnectionRequestSerializer,
+    FollowupSerializer,
+    RecruiterReplySerializer,
+    ReferralRequestSerializer,
+)
 from ai.services import (
     generate_connection_request,
     generate_referral_request,
@@ -15,6 +24,12 @@ from ai.services import (
     stream_recruiter_reply,
     stream_followup,
 )
+from config.throttles import GenerateRateThrottle
+from generations.models import Generation
+
+logger = logging.getLogger(__name__)
+
+AI_UNAVAILABLE = "AI service unavailable. Try again."
 
 
 def get_sender_name(user):
@@ -22,179 +37,150 @@ def get_sender_name(user):
     return full or user.username
 
 
-def get_tone(request):
-    tone = request.data.get("tone", "friendly")
-    return tone if tone in ("formal", "friendly", "concise") else "friendly"
+class GenerationView(APIView):
+    """Shared behaviour for every generation endpoint.
+
+    Subclasses set `serializer_class`, `generation_type` and the provider
+    function (`generate` or `stream`).
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [GenerateRateThrottle]
+    serializer_class = None
+    generation_type = None
+
+    def check_throttles(self, request):
+        # DRF runs authentication -> permissions -> throttles before the
+        # handler. Validating here (after auth, before throttling) means an
+        # invalid request returns 400 without using up the daily quota.
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.validated_data = dict(serializer.validated_data)
+        super().check_throttles(request)
+
+    def provider_kwargs(self):
+        kwargs = {k: v for k, v in self.validated_data.items() if k != "tone"}
+        kwargs["sender_name"] = get_sender_name(self.request.user)
+        kwargs["tone"] = self.validated_data.get("tone") or DEFAULT_TONE
+        return kwargs
+
+    def save_history(self, output):
+        Generation.objects.create(
+            user=self.request.user,
+            generation_type=self.generation_type,
+            input_data=self.validated_data,
+            output=output,
+        )
+
+
+def ai_unavailable_response():
+    return Response({"error": AI_UNAVAILABLE}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 # --- Non-streaming views ---
 
-class GenerateConnectionRequestView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
+class SyncGenerationView(GenerationView):
+    generate = None
 
     def post(self, request):
-        message = generate_connection_request(
-            name=request.data.get("name"),
-            company=request.data.get("company"),
-            role=request.data.get("role"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        Generation.objects.create(
-            user=request.user, generation_type="connection_request",
-            input_data=request.data, output=message,
-        )
+        try:
+            message = type(self).generate(**self.provider_kwargs())
+        except Exception:
+            logger.exception("AI provider failed for %s", self.generation_type)
+            return ai_unavailable_response()
+        self.save_history(message)
         return Response({"message": message})
 
 
-class GenerateReferralRequestView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
-
-    def post(self, request):
-        message = generate_referral_request(
-            name=request.data.get("name"),
-            company=request.data.get("company"),
-            role=request.data.get("role"),
-            job_title=request.data.get("job_title"),
-            your_background=request.data.get("your_background"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        Generation.objects.create(
-            user=request.user, generation_type="referral_request",
-            input_data=request.data, output=message,
-        )
-        return Response({"message": message})
+class GenerateConnectionRequestView(SyncGenerationView):
+    serializer_class = ConnectionRequestSerializer
+    generation_type = "connection_request"
+    generate = staticmethod(generate_connection_request)
 
 
-class GenerateRecruiterReplyView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
-
-    def post(self, request):
-        message = generate_recruiter_reply(
-            recruiter_name=request.data.get("recruiter_name"),
-            company=request.data.get("company"),
-            job_title=request.data.get("job_title"),
-            your_background=request.data.get("your_background"),
-            interest_level=request.data.get("interest_level"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        Generation.objects.create(
-            user=request.user, generation_type="recruiter_reply",
-            input_data=request.data, output=message,
-        )
-        return Response({"message": message})
+class GenerateReferralRequestView(SyncGenerationView):
+    serializer_class = ReferralRequestSerializer
+    generation_type = "referral_request"
+    generate = staticmethod(generate_referral_request)
 
 
-class GenerateFollowupView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
+class GenerateRecruiterReplyView(SyncGenerationView):
+    serializer_class = RecruiterReplySerializer
+    generation_type = "recruiter_reply"
+    generate = staticmethod(generate_recruiter_reply)
 
-    def post(self, request):
-        message = generate_followup(
-            name=request.data.get("name"),
-            company=request.data.get("company"),
-            role=request.data.get("role"),
-            context=request.data.get("context"),
-            days_since=request.data.get("days_since"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        Generation.objects.create(
-            user=request.user, generation_type="followup",
-            input_data=request.data, output=message,
-        )
-        return Response({"message": message})
+
+class GenerateFollowupView(SyncGenerationView):
+    serializer_class = FollowupSerializer
+    generation_type = "followup"
+    generate = staticmethod(generate_followup)
 
 
 # --- Streaming views ---
 
-def _sse_stream(generator, user, generation_type, input_data):
-    full_message = []
+def sse_event(payload):
+    return f"data: {json.dumps(payload)}\n\n"
 
-    def event_stream():
-        for chunk in generator:
-            full_message.append(chunk)
-            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-        Generation.objects.create(
-            user=user,
-            generation_type=generation_type,
-            input_data=input_data,
-            output="".join(full_message),
+
+class StreamGenerationView(GenerationView):
+    stream = None
+
+    def post(self, request):
+        chunks = type(self).stream(**self.provider_kwargs())
+
+        # Pull the first chunk before sending headers: if the provider is
+        # down, the client gets a real 502 instead of an empty 200 stream.
+        try:
+            first = next(chunks, None)
+        except Exception:
+            logger.exception("AI provider failed for %s", self.generation_type)
+            return ai_unavailable_response()
+
+        response = StreamingHttpResponse(
+            self.event_stream(first, chunks), content_type="text/event-stream"
         )
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+    def event_stream(self, first, chunks):
+        full_message = []
+        try:
+            if first is not None:
+                full_message.append(first)
+                yield sse_event({"chunk": first})
+            for chunk in chunks:
+                full_message.append(chunk)
+                yield sse_event({"chunk": chunk})
+        except Exception:
+            # Headers are already sent; report the failure in-band and skip
+            # history so a partial message is never saved.
+            logger.exception("AI provider failed mid-stream for %s", self.generation_type)
+            yield sse_event({"error": AI_UNAVAILABLE})
+            return
+        self.save_history("".join(full_message))
         yield "data: [DONE]\n\n"
 
-    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
-    response["Cache-Control"] = "no-cache"
-    response["X-Accel-Buffering"] = "no"
-    return response
+
+class StreamConnectionRequestView(StreamGenerationView):
+    serializer_class = ConnectionRequestSerializer
+    generation_type = "connection_request"
+    stream = staticmethod(stream_connection_request)
 
 
-class StreamConnectionRequestView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
-
-    def post(self, request):
-        generator = stream_connection_request(
-            name=request.data.get("name"),
-            company=request.data.get("company"),
-            role=request.data.get("role"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        return _sse_stream(generator, request.user, "connection_request", request.data)
+class StreamReferralRequestView(StreamGenerationView):
+    serializer_class = ReferralRequestSerializer
+    generation_type = "referral_request"
+    stream = staticmethod(stream_referral_request)
 
 
-class StreamReferralRequestView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
-
-    def post(self, request):
-        generator = stream_referral_request(
-            name=request.data.get("name"),
-            company=request.data.get("company"),
-            role=request.data.get("role"),
-            job_title=request.data.get("job_title"),
-            your_background=request.data.get("your_background"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        return _sse_stream(generator, request.user, "referral_request", request.data)
+class StreamRecruiterReplyView(StreamGenerationView):
+    serializer_class = RecruiterReplySerializer
+    generation_type = "recruiter_reply"
+    stream = staticmethod(stream_recruiter_reply)
 
 
-class StreamRecruiterReplyView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
-
-    def post(self, request):
-        generator = stream_recruiter_reply(
-            recruiter_name=request.data.get("recruiter_name"),
-            company=request.data.get("company"),
-            job_title=request.data.get("job_title"),
-            your_background=request.data.get("your_background"),
-            interest_level=request.data.get("interest_level"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        return _sse_stream(generator, request.user, "recruiter_reply", request.data)
-
-
-class StreamFollowupView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [GenerateRateThrottle]
-
-    def post(self, request):
-        generator = stream_followup(
-            name=request.data.get("name"),
-            company=request.data.get("company"),
-            role=request.data.get("role"),
-            context=request.data.get("context"),
-            days_since=request.data.get("days_since"),
-            sender_name=get_sender_name(request.user),
-            tone=get_tone(request),
-        )
-        return _sse_stream(generator, request.user, "followup", request.data)
+class StreamFollowupView(StreamGenerationView):
+    serializer_class = FollowupSerializer
+    generation_type = "followup"
+    stream = staticmethod(stream_followup)

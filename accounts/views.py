@@ -3,7 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from config.throttles import AuthRateThrottle
+from rest_framework_simplejwt.views import TokenBlacklistView
+from config.throttles import AuthRateThrottle, LogoutRateThrottle
 
 from accounts.serializers import RegisterSerializer, UserSerializer
 
@@ -45,3 +46,14 @@ class ExtensionTokenView(APIView):
     def post(self, request):
         refresh = RefreshToken.for_user(request.user)
         return Response({"access": str(refresh.access_token), "refresh": str(refresh)})
+
+
+class LogoutView(TokenBlacklistView):
+    """Revoke a refresh token. Body: {"refresh": "<token>"}.
+
+    Needs no access token, so logout still works after the access token has
+    expired. Each session (web, extension) revokes only its own refresh token;
+    access tokens stay valid until they expire (at most 30 minutes).
+    """
+
+    throttle_classes = [LogoutRateThrottle]

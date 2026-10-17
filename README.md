@@ -58,7 +58,6 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | Sync and streaming generation, prompts, tone, auth, throttling | `ai/tests.py` |
 | History list, search, delete, per-user isolation | `generations/tests.py` |
 
-`test_missing_required_fields_are_rejected` is marked as an expected failure: the generation endpoints do not validate input yet.
 
 ## Dependencies
 
@@ -71,11 +70,14 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | POST | `/api/auth/register/` | none |
 | POST | `/api/auth/login/` | none |
 | POST | `/api/auth/refresh/` | none |
+| POST | `/api/auth/logout/` | none (body `{"refresh": ...}`; revokes that refresh token, access tokens expire within 30 min) |
 | GET | `/api/auth/me/` | Bearer |
 | POST | `/api/auth/social/google/` | none |
 | POST | `/api/auth/extension-token/` | Bearer (issues a separate token pair for the browser extension) |
 | POST | `/api/generate/{connection-request,referral-request,recruiter-reply,followup}/` | Bearer |
 | POST | `/api/generate/stream/{same four}/` | Bearer (SSE) |
+
+Generation requests are validated: every field is required and trimmed, short fields (names, company, role, job title) allow 150 characters, `your_background` and `context` 2000, `interest_level` is one of `very interested` / `somewhat interested` / `not interested`, and `days_since` is a whole number from 0 to 3650. Invalid requests return 400 and do not count toward the daily limit. If the AI provider fails, the endpoints return 502 `{"error": ...}`; a stream that fails part-way ends with a `data: {"error": ...}` event instead of `[DONE]`, and nothing is saved to history.
 | GET | `/api/history/?search=` | Bearer |
 | DELETE | `/api/history/<id>/` | Bearer |
 | GET | `/health/` | none |

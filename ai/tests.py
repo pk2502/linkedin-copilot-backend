@@ -1,6 +1,5 @@
 import importlib
 import json
-import unittest
 from types import SimpleNamespace
 from unittest import mock
 
@@ -62,7 +61,7 @@ GENERATORS = {
             "company": "Acme",
             "job_title": "Staff Engineer",
             "your_background": "8 years of full-stack work",
-            "interest_level": "interested",
+            "interest_level": "very interested",
         },
     },
     "followup": {
@@ -78,6 +77,14 @@ GENERATORS = {
 }
 
 SYNC_REPLY = "Hi Priya, great to connect."
+
+
+def stored_input(payload):
+    """History stores validated input: days_since becomes an integer."""
+    cleaned = dict(payload)
+    if "days_since" in cleaned:
+        cleaned["days_since"] = int(cleaned["days_since"])
+    return cleaned
 STREAM_CHUNKS = ["Hi ", "Priya, ", "great to connect."]
 
 
@@ -147,7 +154,7 @@ class SyncGenerationTests(GenerationAPITestCase):
                 generation = Generation.objects.get()
                 self.assertEqual(generation.user, self.user)
                 self.assertEqual(generation.generation_type, generation_type)
-                self.assertEqual(generation.input_data, payload)
+                self.assertEqual(generation.input_data, stored_input(payload))
                 self.assertEqual(generation.output, SYNC_REPLY)
                 self.assertFalse(self.fake.calls[-1].get("stream", False))
 
@@ -186,14 +193,11 @@ class SyncGenerationTests(GenerationAPITestCase):
 
         self.assertIn("Your Name (the sender): alice", self.fake.last_prompt)
 
-    @unittest.expectedFailure
     def test_missing_required_fields_are_rejected(self):
-        # Known gap, scheduled for Phase 3: there is no request validation, so
-        # missing fields reach the prompt as the literal text "None" and the
-        # endpoint returns 200 instead of 400.
         response = self.client.post(self.sync_url("connection-request"), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(response.data), {"name", "company", "role"})
 
 
 class StreamingGenerationTests(GenerationAPITestCase):
@@ -228,7 +232,7 @@ class StreamingGenerationTests(GenerationAPITestCase):
                 generation = Generation.objects.get()
                 self.assertEqual(generation.user, self.user)
                 self.assertEqual(generation.generation_type, generation_type)
-                self.assertEqual(generation.input_data, spec["payload"])
+                self.assertEqual(generation.input_data, stored_input(spec["payload"]))
                 self.assertEqual(generation.output, "".join(STREAM_CHUNKS))
 
     def test_history_is_saved_only_after_stream_is_consumed(self):
@@ -337,3 +341,145 @@ class GroqRequestOptionsTests(GenerationAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, {"message": ""})
+
+
+class GenerationValidationTests(GenerationAPITestCase):
+    def assert_rejected(self, slug, payload, field):
+        for url in (self.sync_url(slug), self.stream_url(slug)):
+            with self.subTest(url=url, field=field):
+                response = self.client.post(url, payload, format="json")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(field, response.data)
+
+    def test_every_endpoint_rejects_each_missing_field(self):
+        for spec in GENERATORS.values():
+            for field in spec["payload"]:
+                payload = {k: v for k, v in spec["payload"].items() if k != field}
+                self.assert_rejected(spec["slug"], payload, field)
+        self.assertEqual(self.fake.calls, [])
+        self.assertFalse(Generation.objects.exists())
+
+    def test_blank_and_whitespace_values_are_rejected(self):
+        spec = GENERATORS["connection_request"]
+        for value in ("", "   "):
+            self.assert_rejected(spec["slug"], {**spec["payload"], "name": value}, "name")
+
+    def test_values_are_trimmed_before_prompt_and_history(self):
+        spec = GENERATORS["connection_request"]
+
+        self.client.post(
+            self.sync_url(spec["slug"]), {**spec["payload"], "name": "  Priya Shah  "}, format="json"
+        )
+
+        self.assertIn("Recipient Name: Priya Shah\n", self.fake.last_prompt)
+        self.assertEqual(Generation.objects.get().input_data["name"], "Priya Shah")
+
+    def test_overlong_values_are_rejected(self):
+        referral = GENERATORS["referral_request"]
+        self.assert_rejected(referral["slug"], {**referral["payload"], "company": "x" * 151}, "company")
+        self.assert_rejected(
+            referral["slug"], {**referral["payload"], "your_background": "x" * 2001}, "your_background"
+        )
+
+    def test_limits_are_inclusive(self):
+        referral = GENERATORS["referral_request"]
+        payload = {**referral["payload"], "company": "x" * 150, "your_background": "x" * 2000}
+
+        response = self.client.post(self.sync_url(referral["slug"]), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_interest_level_must_be_a_known_choice(self):
+        spec = GENERATORS["recruiter_reply"]
+        self.assert_rejected(spec["slug"], {**spec["payload"], "interest_level": "maybe"}, "interest_level")
+
+    def test_days_since_must_be_a_reasonable_whole_number(self):
+        spec = GENERATORS["followup"]
+        for value in ("soon", -1, 3651, "1.5"):
+            self.assert_rejected(spec["slug"], {**spec["payload"], "days_since": value}, "days_since")
+
+    def test_unknown_fields_are_not_stored(self):
+        spec = GENERATORS["connection_request"]
+
+        self.client.post(
+            self.sync_url(spec["slug"]), {**spec["payload"], "admin": True, "blob": "x" * 5000},
+            format="json",
+        )
+
+        self.assertEqual(Generation.objects.get().input_data, spec["payload"])
+
+    def test_invalid_requests_do_not_use_the_daily_quota(self):
+        spec = GENERATORS["connection_request"]
+        for _ in range(25):
+            self.client.post(self.sync_url(spec["slug"]), {}, format="json")
+
+        response = self.client.post(self.sync_url(spec["slug"]), spec["payload"], format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_authentication_is_checked_before_validation(self):
+        self.client.credentials()
+
+        response = self.client.post(self.sync_url("connection-request"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ProviderFailureTests(GenerationAPITestCase):
+    def fail_on_create(self):
+        def create(**kwargs):
+            self.fake.calls.append(kwargs)
+            raise RuntimeError("groq down")
+
+        self.fake.chat.completions.create = create
+
+    def test_sync_provider_failure_returns_502_without_history(self):
+        self.fail_on_create()
+        spec = GENERATORS["connection_request"]
+
+        with self.assertLogs("ai.views", level="ERROR"):
+            response = self.client.post(self.sync_url(spec["slug"]), spec["payload"], format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(response.data, {"error": "AI service unavailable. Try again."})
+        self.assertFalse(Generation.objects.exists())
+
+    def test_stream_failure_before_first_chunk_returns_502(self):
+        self.fail_on_create()
+        spec = GENERATORS["followup"]
+
+        with self.assertLogs("ai.views", level="ERROR"):
+            response = self.client.post(self.stream_url(spec["slug"]), spec["payload"], format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertFalse(response.streaming)
+        self.assertFalse(Generation.objects.exists())
+
+    def test_stream_failure_mid_way_sends_error_event_without_done_or_history(self):
+        def create(**kwargs):
+            def chunks():
+                yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hi "))])
+                raise RuntimeError("connection reset")
+            return chunks()
+
+        self.fake.chat.completions.create = create
+        spec = GENERATORS["connection_request"]
+
+        response = self.client.post(self.stream_url(spec["slug"]), spec["payload"], format="json")
+        with self.assertLogs("ai.views", level="ERROR"):
+            events = StreamingGenerationTests.read_events(response)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(json.loads(events[0]), {"chunk": "Hi "})
+        self.assertEqual(json.loads(events[-1]), {"error": "AI service unavailable. Try again."})
+        self.assertNotIn("[DONE]", events)
+        self.assertFalse(Generation.objects.exists())
+
+    def test_empty_stream_still_finishes_and_saves(self):
+        self.fake.chat.completions.create = lambda **kwargs: iter([])
+        spec = GENERATORS["connection_request"]
+
+        response = self.client.post(self.stream_url(spec["slug"]), spec["payload"], format="json")
+
+        self.assertEqual(StreamingGenerationTests.read_events(response), ["[DONE]"])
+        self.assertEqual(Generation.objects.get().output, "")

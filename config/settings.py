@@ -360,6 +360,7 @@ REST_FRAMEWORK = {
         "user": "100/day",
         "generate": "20/day",
         "auth": "10/hour",
+        "logout": "60/hour",
     },
 }
 
