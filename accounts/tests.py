@@ -180,3 +180,47 @@ class GoogleLoginTokenTests(AuthTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
+
+
+class ExtensionTokenTests(AuthTestCase):
+    URL = "/api/auth/extension-token/"
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="alice", password=PASSWORD)
+        self.web_refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.web_refresh.access_token}")
+
+    def test_requires_authentication(self):
+        self.client.credentials()
+
+        response = self.client.post(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_rejects_get(self):
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_returns_a_new_token_pair_for_the_same_user(self):
+        response = self.client.post(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.data), {"access", "refresh"})
+        self.assertNotEqual(response.data["refresh"], str(self.web_refresh))
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+        me = self.client.get(ME_URL)
+        self.assertEqual(me.data["id"], self.user.id)
+
+    def test_extension_and_web_sessions_rotate_independently(self):
+        extension = self.client.post(self.URL).data
+        self.client.credentials()
+
+        rotated = self.client.post(REFRESH_URL, {"refresh": extension["refresh"]}, format="json")
+        web = self.client.post(REFRESH_URL, {"refresh": str(self.web_refresh)}, format="json")
+
+        # Rotating (and blacklisting) the extension token leaves the web session working.
+        self.assertEqual(rotated.status_code, status.HTTP_200_OK)
+        self.assertEqual(web.status_code, status.HTTP_200_OK)

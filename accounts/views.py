@@ -29,3 +29,19 @@ class MeView(APIView):
 
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+
+class ExtensionTokenView(APIView):
+    """Issue a token pair dedicated to the browser extension.
+
+    Called by the web app's /connect-extension page for a signed-in user (any
+    sign-in method, including Google). The extension gets its own refresh
+    token, so rotating it never invalidates the web app's session and vice
+    versa.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh = RefreshToken.for_user(request.user)
+        return Response({"access": str(refresh.access_token), "refresh": str(refresh)})

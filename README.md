@@ -73,6 +73,7 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | POST | `/api/auth/refresh/` | none |
 | GET | `/api/auth/me/` | Bearer |
 | POST | `/api/auth/social/google/` | none |
+| POST | `/api/auth/extension-token/` | Bearer (issues a separate token pair for the browser extension) |
 | POST | `/api/generate/{connection-request,referral-request,recruiter-reply,followup}/` | Bearer |
 | POST | `/api/generate/stream/{same four}/` | Bearer (SSE) |
 | GET | `/api/history/?search=` | Bearer |
