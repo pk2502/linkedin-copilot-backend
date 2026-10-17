@@ -1,0 +1,36 @@
+name: Keep-alive
+
+# Once a day, run a trivial query through the production API. Supabase pauses
+# free projects after 7 days without database activity; this keeps the project
+# active and fails visibly (red run, email from GitHub) if the backend or the
+# database is down.
+#
+# GitHub disables scheduled workflows in repositories with no commits for 60
+# days. Re-enable it from the Actions tab if that happens.
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # 03:17 UTC daily (08:47 IST)
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query the database through the API
+        env:
+          URL: https://connectpilot-api.onrender.com/health/db/
+        run: |
+          # Render's free plan may be asleep; allow time for a cold start.
+          for attempt in 1 2 3; do
+            if curl --fail --silent --show-error --max-time 90 "$URL"; then
+              echo
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 30s"
+            sleep 30
+          done
+          exit 1

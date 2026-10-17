@@ -1,5 +1,7 @@
 # ConnectPilot Backend
 
+[![CI](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/ci.yml) [![Keep-alive](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/keepalive.yml/badge.svg)](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/keepalive.yml)
+
 Django REST API for ConnectPilot (formerly Li Copilot): JWT and Google sign-in, AI-generated LinkedIn messages via Groq (sync and SSE streaming), and per-user generation history.
 
 For production deployment (Render + Supabase), see [DEPLOYMENT.md](DEPLOYMENT.md).
@@ -36,7 +38,7 @@ Run the server on port 8001 (the frontend and extension default to it):
 python manage.py runserver 8001
 ```
 
-Health check: `GET http://localhost:8001/health/` returns `{"status": "ok"}`.
+Health check: `GET http://localhost:8001/health/` returns `{"status": "ok"}`. `GET /health/db/` also queries the database (used by the daily keep-alive job).
 
 ## Checks and tests
 
@@ -46,6 +48,8 @@ python manage.py check
 python manage.py makemigrations --check --dry-run
 python manage.py test
 ```
+
+CI (`.github/workflows/ci.yml`) runs the same checks on every push and pull request.
 
 Tests never call the real Groq API: generation tests replace the client with a fake and fail if a real one is constructed.
 
@@ -81,3 +85,4 @@ Generation requests are validated: every field is required and trimmed, short fi
 | GET | `/api/history/?search=` | Bearer |
 | DELETE | `/api/history/<id>/` | Bearer |
 | GET | `/health/` | none |
+| GET | `/health/db/` | none (runs `SELECT 1`; 503 when the database is down) |

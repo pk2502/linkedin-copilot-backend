@@ -4,7 +4,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.test import Client, SimpleTestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import resolve
 
 
@@ -186,6 +186,29 @@ class ProductionSettingsHardeningTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
 
+    def test_cors_origin_regexes_default_to_none(self):
+        settings_module = self._reload_settings(CORS_ALLOWED_ORIGIN_REGEXES="")
+        self.assertEqual(settings_module.CORS_ALLOWED_ORIGIN_REGEXES, [])
+
+    def test_cors_origin_regexes_accept_anchored_https_patterns(self):
+        preview = r"^https://linkedin-copilot-frontend-[a-z0-9-]+-pk2502s-projects\.vercel\.app$"
+        settings_module = self._reload_settings(CORS_ALLOWED_ORIGIN_REGEXES=f"  {preview}\n")
+        self.assertEqual(settings_module.CORS_ALLOWED_ORIGIN_REGEXES, [preview])
+
+    def test_cors_origin_regexes_reject_unsafe_patterns(self):
+        for pattern in (
+            r"https://app\.vercel\.app$",          # not anchored at start
+            r"^https://app\.vercel\.app",          # not anchored at end
+            r"^http://app\.vercel\.app$",          # not HTTPS
+            r"^https://.*$",                        # unescaped dot
+            r"^https://app.vercel\.app$",           # unescaped dot
+            r"^https://a\.com$|evil",               # alternation escapes the anchors
+            r"^https://[a-z\.com$",                 # does not compile
+        ):
+            with self.subTest(pattern=pattern):
+                with self.assertRaises(ImproperlyConfigured):
+                    self._reload_settings(CORS_ALLOWED_ORIGIN_REGEXES=pattern)
+
     def test_existing_api_routes_remain_unchanged(self):
         route_names = {
             "/api/auth/login/": "token_obtain_pair",
@@ -198,3 +221,43 @@ class ProductionSettingsHardeningTests(SimpleTestCase):
         for route, expected_name in route_names.items():
             with self.subTest(route=route):
                 self.assertEqual(resolve(route).url_name, expected_name)
+
+
+class DatabaseHealthCheckTests(TestCase):
+    def test_returns_ok_when_database_answers(self):
+        response = Client().get("/health/db/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_returns_503_without_details_when_database_fails(self):
+        with mock.patch("config.views.connection") as connection:
+            connection.cursor.side_effect = RuntimeError("could not connect to server: secret-host")
+            with self.assertLogs("config.views", level="ERROR"):
+                response = Client().get("/health/db/")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"status": "unavailable"})
+        self.assertNotIn(b"secret-host", response.content)
+
+
+class PreviewCorsTests(SimpleTestCase):
+    PREVIEW = r"^https://linkedin-copilot-frontend-[a-z0-9-]+-pk2502s-projects\.vercel\.app$"
+
+    def preflight(self, origin):
+        return Client().options(
+            "/api/auth/login/",
+            HTTP_ORIGIN=origin,
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        )
+
+    def test_matching_preview_origin_is_allowed(self):
+        origin = "https://linkedin-copilot-frontend-7txq3lngv-pk2502s-projects.vercel.app"
+        with override_settings(CORS_ALLOWED_ORIGIN_REGEXES=[self.PREVIEW]):
+            response = self.preflight(origin)
+        self.assertEqual(response["Access-Control-Allow-Origin"], origin)
+
+    def test_other_vercel_origins_are_not_allowed(self):
+        with override_settings(CORS_ALLOWED_ORIGIN_REGEXES=[self.PREVIEW]):
+            response = self.preflight("https://evil-pk2502s-projects.vercel.app")
+        self.assertNotIn("Access-Control-Allow-Origin", response)

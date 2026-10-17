@@ -255,6 +255,36 @@ CSRF_TRUSTED_ORIGINS = _as_csv(
     os.environ.get('CSRF_TRUSTED_ORIGINS', _default_origins)
 )
 
+
+def _validate_origin_regexes(raw):
+    """Parse CORS_ALLOWED_ORIGIN_REGEXES (whitespace-separated, since regexes may contain commas).
+
+    Each pattern must be a fully anchored HTTPS origin with every dot escaped
+    and no alternation, so a typo cannot open CORS to arbitrary sites.
+    """
+    patterns = str(raw or '').split()
+    for pattern in patterns:
+        if not pattern.startswith('^https://') or not pattern.endswith('$'):
+            raise ImproperlyConfigured(
+                f'CORS origin regex must start with ^https:// and end with $: {pattern!r}'
+            )
+        if '|' in pattern or re.search(r'(?<!\\)\.', pattern):
+            raise ImproperlyConfigured(
+                f'CORS origin regex must escape every dot and not use "|": {pattern!r}'
+            )
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise ImproperlyConfigured(f'Invalid CORS origin regex: {pattern!r}') from exc
+    return patterns
+
+
+# Optional, e.g. Vercel preview deployments of the frontend. JWT auth uses
+# headers, not cookies, so CSRF_TRUSTED_ORIGINS does not need these.
+CORS_ALLOWED_ORIGIN_REGEXES = _validate_origin_regexes(
+    os.environ.get('CORS_ALLOWED_ORIGIN_REGEXES', '')
+)
+
 SESSION_COOKIE_SECURE = IS_PRODUCTION
 CSRF_COOKIE_SECURE = IS_PRODUCTION
 SESSION_COOKIE_SAMESITE = 'Lax'

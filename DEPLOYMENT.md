@@ -56,13 +56,26 @@ The Ollama provider module is dormant: the active generation service imports the
 
 ## Origins and client compatibility
 
-The backend's production CORS and CSRF defaults include the current frontend origin `https://li-copilot.vercel.app`. Preview Vercel domains are not wildcard-enabled; add only exact preview origins when intentionally testing them. CORS is needed for the extension's bearer-token requests. The extension's immutable Chrome origin is `chrome-extension://<extension-id>`; only add its exact origin after the extension ID is known. The extension must also be updated separately to use the Render URL and grant that host in `manifest.json`.
+The backend's production CORS and CSRF defaults include the frontend origin `https://li-copilot.vercel.app`. The API uses `Authorization: Bearer ...` JWTs, not cookies, so CSRF settings do not affect the frontend or the extension.
 
-The frontend already reads `NEXT_PUBLIC_API_URL` in `lib/axios.ts` and `lib/generation.ts`; configure it in Vercel as the backend base URL, with no trailing slash. Its API paths match the backend's login, refresh, registration, profile, generation, and history routes. The current fallback is a localhost URL and is unsuitable for a deployed frontend.
+The frontend reads `NEXT_PUBLIC_API_URL` (Vercel Config variable, no trailing slash). Its fallback is `http://localhost:8001`, so every Vercel environment that should reach the API needs the variable set.
 
-The extension hardcodes `https://linkedin-copilot.duckdns.org` in `popup.js`; `manifest.json` only grants that API host and `http://localhost:8001`. It currently posts the same login and generation payloads as the API, but stores the refresh token without using the refresh endpoint. Since access tokens expire after 30 minutes, an expired token sends the tester back to login. Updating the URL, host permission, and refresh flow is a separate client phase and is required before the extension can work against Render.
+The Chrome extension (1.1+) calls `https://connectpilot-api.onrender.com` from its popup. Chrome exempts extension pages from CORS for hosts listed in `host_permissions`, so no `chrome-extension://` origin needs to be added. It refreshes tokens itself and can be signed in from the web app's `/connect-extension` page, which mints a separate token pair via `POST /api/auth/extension-token/`.
 
-The extension sends `Authorization: Bearer ...` and does not rely on cross-site cookies. Production uses secure session/CSRF cookies for Django session-based surfaces, HTTPS redirect behind Render's `X-Forwarded-Proto` header, and JWT headers for API auth. Chrome extension CORS does not require adding its origin to `CSRF_TRUSTED_ORIGINS`.
+### Vercel preview deployments
+
+Preview URLs look like `https://linkedin-copilot-frontend-<hash>-pk2502s-projects.vercel.app`. To let them call the API:
+
+1. In Render, set `CORS_ALLOWED_ORIGIN_REGEXES` to
+
+   ```
+   ^https://linkedin-copilot-frontend-[a-z0-9-]+-pk2502s-projects\.vercel\.app$
+   ```
+
+   The value is whitespace-separated. Startup rejects any pattern that is not anchored with `^https://` and `$`, has an unescaped dot, or uses `|`.
+2. In Vercel, add `NEXT_PUBLIC_API_URL` to the **Preview** environment as well.
+
+Previews then use the production API and database (real accounts and the real daily limit). Google sign-in does not work on previews because Google only accepts pre-registered exact origins; use username and password there.
 
 ## Database and migration notes
 
@@ -82,12 +95,18 @@ Before a release with schema changes, take a database backup and confirm the mig
 6. Before extension beta use, update its API URL and host permission in the extension repository, publish/load the resulting build, then add that exact extension ID to backend CORS. No extension edits are part of this phase.
 7. Verify HTTPS, health, login, refresh rotation, authenticated generation, and history using a non-production tester account before inviting the initial 3–5 testers.
 
-## Next phase checklist
+## Operations
 
-- Verify the pinned dependency set in Render's Linux build environment.
-- Deploy the backend and confirm `/health/` over HTTPS.
-- Configure Supabase connectivity and run migrations once against the intended empty beta database.
-- Set Vercel `NEXT_PUBLIC_API_URL` to the Render service URL and verify web auth, generation, and history.
-- Update the extension's backend URL and `host_permissions`; implement refresh-token use before beta use.
-- Add the published extension's exact `chrome-extension://` origin to CORS and test login/generation from the extension.
-- Keep a tested backup/rollback procedure and invite only the planned testers.
+### CI
+
+Every push and pull request runs `.github/workflows/ci.yml`: Django `check`, `makemigrations --check` and the full test suite against a PostgreSQL 16 service container. No secrets are used; Groq is faked in tests.
+
+### Keep-alive and uptime check
+
+Supabase pauses free projects after 7 days without database activity. `.github/workflows/keepalive.yml` calls `GET /health/db/` once a day (03:17 UTC). The endpoint runs `SELECT 1` and returns `{"status": "ok"}`, or 503 `{"status": "unavailable"}` when the database cannot be reached; it never exposes error details. A failed run shows in the Actions tab and GitHub emails the repository owner. Run it on demand with **Actions → Keep-alive → Run workflow**.
+
+GitHub disables scheduled workflows after 60 days without commits to the repository. If that happens, re-enable it from the same page.
+
+`/health/` (Render's health check) stays database-free, so a database outage does not make Render restart the service.
+
+Render's free plan sleeps after 15 minutes without traffic; the first request afterwards takes about a minute. The keep-alive job retries to allow for this.
