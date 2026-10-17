@@ -1,6 +1,6 @@
 # ConnectPilot Backend
 
-[![CI](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/ci.yml) [![Keep-alive](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/keepalive.yml/badge.svg)](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/keepalive.yml)
+[![CI](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/ci.yml) [![Warm ping](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/warm.yml/badge.svg)](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/warm.yml) [![Keep-alive](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/keepalive.yml/badge.svg)](https://github.com/pk2502/linkedin-copilot-backend/actions/workflows/keepalive.yml)
 
 Django REST API for ConnectPilot (formerly Li Copilot): JWT and Google sign-in, AI-generated LinkedIn messages via Groq (sync and SSE streaming), and per-user generation history.
 

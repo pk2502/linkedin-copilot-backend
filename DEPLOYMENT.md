@@ -110,3 +110,7 @@ GitHub disables scheduled workflows after 60 days without commits to the reposit
 `/health/` (Render's health check) stays database-free, so a database outage does not make Render restart the service.
 
 Render's free plan sleeps after 15 minutes without traffic; the first request afterwards takes about a minute. The keep-alive job retries to allow for this.
+
+### Warm ping
+
+`.github/workflows/warm.yml` calls `/health/` every 14 minutes from 01:00 to 19:59 UTC (about 06:30 to 01:30 IST), so the API answers instantly during the day. It is paused overnight to use about 590 of Render's 750 free instance hours a month; the first request after 01:30 IST can be a cold start. GitHub may start scheduled runs late, so an occasional cold start can happen during the day too. Disable the workflow from the Actions tab to stop it.
