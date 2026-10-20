@@ -324,6 +324,7 @@ INSTALLED_APPS = [
     'accounts',
     'ai',
     'generations',
+    'contacts',
 ]
 
 MIDDLEWARE = [
@@ -392,6 +393,9 @@ def _daily_limit(name, default):
         raise ImproperlyConfigured(f'{name} must be at least 1.')
     return value
 
+
+# Days after a message is sent before the tracker suggests a follow-up.
+FOLLOW_UP_DAYS = _daily_limit('FOLLOW_UP_DAYS', 5)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

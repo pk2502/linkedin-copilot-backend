@@ -26,4 +26,5 @@ urlpatterns = [
     path("api/drafts/", include("ai.draft_urls")),
     path("api/history/", include("generations.urls")),
     path("api/onboarding/", OnboardingView.as_view(), name="onboarding"),
+    path("api/contacts/", include("contacts.urls")),
 ]

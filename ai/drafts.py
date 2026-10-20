@@ -19,6 +19,7 @@ from ai.providers import groq_provider
 from ai.serializers import DEFAULT_TONE, DRAFT_SERIALIZERS, EPHEMERAL_FIELDS, NEEDS_BACKGROUND, TweakSerializer
 from ai.views import AI_UNAVAILABLE, get_sender_name
 from config.throttles import GenerateRateThrottle, TweakRateThrottle
+from contacts.services import contact_for_draft
 from generations.models import Generation
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ class DraftView(APIView):
         tone = self.validated.pop("tone", None) or DEFAULT_TONE
         # Page context goes to the prompt only; it is never stored in history.
         ephemeral = {field: self.validated.pop(field, "") or "" for field in EPHEMERAL_FIELDS}
+        linkedin_url = self.validated.pop("linkedin_url", "") or ""
         messages = build_draft_messages(
             self.generation_type,
             self.validated,
@@ -99,8 +101,12 @@ class DraftView(APIView):
             output=drafts[0],
             variants=drafts,
             source=request_source(request),
+            contact=contact_for_draft(request.user, self.generation_type, self.validated, linkedin_url),
         )
-        return Response({"id": generation.id, "variants": drafts}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"id": generation.id, "variants": drafts, "contact_id": generation.contact_id},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class TweakView(APIView):
@@ -145,5 +151,6 @@ class TweakView(APIView):
             variants=[text],
             parent=root,
             source=request_source(request),
+            contact=root.contact,
         )
         return Response({"id": generation.id, "text": text}, status=status.HTTP_201_CREATED)

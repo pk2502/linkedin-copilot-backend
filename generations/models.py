@@ -22,6 +22,10 @@ class Generation(models.Model):
     # db_default keeps older code's inserts working during a rolling deploy.
     SOURCES = [("web", "Web app"), ("extension", "Extension")]
     source = models.CharField(max_length=16, choices=SOURCES, default="web", db_default="web")
+    # The person this draft is for, in the outreach tracker.
+    contact = models.ForeignKey(
+        "contacts.Contact", null=True, blank=True, on_delete=models.SET_NULL, related_name="generations"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

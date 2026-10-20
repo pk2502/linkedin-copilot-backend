@@ -81,6 +81,9 @@ class RecipientContextMixin(serializers.Serializer):
     # Visible text from the recipient's LinkedIn profile (About, experience,
     # education), read by the extension when the user opens it.
     recipient_context = optional_text(RECIPIENT_CONTEXT_MAX)
+    # Their profile URL, for the outreach tracker. Stored on the contact, not
+    # in the draft's history entry.
+    linkedin_url = optional_text(300)
 
 
 class DraftConnectionSerializer(RecipientContextMixin, ConnectionRequestSerializer):
