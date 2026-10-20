@@ -354,3 +354,67 @@ class PageContextTests(DraftTestCase):
         system = self.fake.calls[-1]["messages"][0]["content"]
         self.assertIn("common ground", system)
         self.assertIn("job posting", system)
+
+
+class ConversationTests(DraftTestCase):
+    THREAD = (
+        "Sam Lee (them), Oct 12: Hi Alice, we're hiring a Staff Engineer at Acme. Open to a chat this week?\n"
+        "Alice (me), Oct 12: Thanks Sam, sounds interesting."
+    )
+
+    def test_recruiter_reply_needs_only_name_and_interest_with_a_conversation(self):
+        self.add_profile()
+
+        response = self.draft(
+            "recruiter_reply",
+            recruiter_name="Sam Lee",
+            company="",
+            job_title="",
+            interest_level="very interested",
+            conversation=self.THREAD,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        user = self.fake.last_user_message
+        data_block = user[user.index("<data>"):user.index("</data>")]
+        self.assertIn("Open to a chat this week?", data_block)
+        self.assertIn('"today"', data_block)
+        self.assertIn("If the recipient wrote", self.fake.calls[-1]["messages"][0]["content"])
+
+    def test_followup_needs_only_a_name_with_a_conversation(self):
+        response = self.draft(
+            "followup", name="Priya Shah", company="", role="", context="", days_since=None, conversation=self.THREAD
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+
+    def test_fields_stay_required_without_a_conversation(self):
+        self.add_profile()
+        response = self.draft("recruiter_reply", company="", job_title="")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(response.json()), {"company", "job_title"})
+
+        response = self.draft("followup", context="", days_since=None)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(response.json()), {"context", "days_since"})
+        self.assertEqual(self.fake.calls, [])
+
+    def test_names_are_always_required(self):
+        response = self.draft("followup", name="", conversation=self.THREAD)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.json())
+
+    def test_conversation_is_never_stored(self):
+        self.draft("followup", conversation=self.THREAD)
+
+        stored = Generation.objects.get().input_data
+        self.assertNotIn("conversation", stored)
+        self.assertNotIn("Open to a chat", str(stored))
+
+    def test_conversation_is_capped(self):
+        response = self.draft("followup", conversation="x" * 4001)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conversation", response.json())
+
+    def test_today_is_only_added_with_a_conversation(self):
+        self.draft("followup")
+        self.assertNotIn('"today"', self.fake.last_user_message)

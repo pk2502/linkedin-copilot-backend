@@ -9,6 +9,7 @@ Design:
   history.
 - Three variants take different angles so the user has a real choice.
 """
+import datetime
 import json
 
 TONE_INSTRUCTIONS = {
@@ -77,6 +78,10 @@ Rules:
   points naturally. Only claim common ground that is clearly supported by both sides' data.
 - If a job posting is provided, connect the sender's two strongest relevant qualifications to
   specific requirements of that job. Do not quote the posting at length.
+- If a conversation is provided, write the sender's next message in it. If the recipient wrote
+  last, answer their last message directly (questions, times, requests). If the sender wrote
+  last, follow up briefly without repeating the earlier message. Use the message dates and today's
+  date to judge how much time has passed. Never quote the conversation back.
 - Return exactly three distinct drafts, each following its assigned angle.
 """
 
@@ -135,7 +140,15 @@ def _sender(profile, sender_name, background_override=""):
 
 
 def build_draft_messages(
-    generation_type, fields, tone, sender_name, profile=None, recipient_context="", job_description=""
+    generation_type,
+    fields,
+    tone,
+    sender_name,
+    profile=None,
+    recipient_context="",
+    job_description="",
+    conversation="",
+    today=None,
 ):
     """Chat messages for three drafts. `fields` are the validated request fields
     (without the page-context fields, which are passed separately)."""
@@ -152,6 +165,9 @@ def build_draft_messages(
         data["recipient_profile_text"] = recipient_context.strip()
     if job_description.strip():
         data["job_posting"] = job_description.strip()
+    if conversation.strip():
+        data["conversation"] = conversation.strip()
+        data["today"] = (today or datetime.date.today()).isoformat()
 
     angles = "\n".join(f"Draft {i + 1}: {angle}" for i, angle in enumerate(ANGLES))
     user = (

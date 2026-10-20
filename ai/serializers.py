@@ -69,7 +69,8 @@ class FollowupSerializer(GenerationRequestSerializer):
 
 RECIPIENT_CONTEXT_MAX = 4000
 JOB_DESCRIPTION_MAX = 6000
-EPHEMERAL_FIELDS = ("recipient_context", "job_description")
+CONVERSATION_MAX = 4000
+EPHEMERAL_FIELDS = ("recipient_context", "job_description", "conversation")
 
 
 def optional_text(max_length):
@@ -91,12 +92,48 @@ class DraftReferralSerializer(RecipientContextMixin, ReferralRequestSerializer):
     job_description = optional_text(JOB_DESCRIPTION_MAX)
 
 
-class DraftRecruiterSerializer(RecipientContextMixin, RecruiterReplySerializer):
+class ConversationMixin(serializers.Serializer):
+    """The recent LinkedIn messages with this person, read by the extension.
+
+    With a conversation the model can see what was said, so the fields that
+    only describe it (OPTIONAL_WITH_CONVERSATION) may be left empty. Without
+    one they stay required.
+    """
+
+    OPTIONAL_WITH_CONVERSATION = ()
+
+    conversation = optional_text(CONVERSATION_MAX)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in self.OPTIONAL_WITH_CONVERSATION:
+            field = self.fields[name]
+            field.required = False
+            if isinstance(field, serializers.CharField):
+                field.allow_blank = True
+            else:
+                field.allow_null = True
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not (attrs.get("conversation") or "").strip():
+            missing = {
+                name: [serializers.Field.default_error_messages["required"]]
+                for name in self.OPTIONAL_WITH_CONVERSATION
+                if attrs.get(name) in (None, "")
+            }
+            if missing:
+                raise serializers.ValidationError(missing)
+        return attrs
+
+
+class DraftRecruiterSerializer(ConversationMixin, RecipientContextMixin, RecruiterReplySerializer):
+    OPTIONAL_WITH_CONVERSATION = ("company", "job_title")
     your_background = optional_text(LONG_TEXT)
 
 
-class DraftFollowupSerializer(RecipientContextMixin, FollowupSerializer):
-    pass
+class DraftFollowupSerializer(ConversationMixin, RecipientContextMixin, FollowupSerializer):
+    OPTIONAL_WITH_CONVERSATION = ("company", "role", "context", "days_since")
 
 
 DRAFT_SERIALIZERS = {
