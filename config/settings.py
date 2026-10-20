@@ -406,6 +406,7 @@ REST_FRAMEWORK = {
         "user": "100/day",
         "generate": f"{_daily_limit('GENERATE_DAILY_LIMIT', 20)}/day",
         "tweak": f"{_daily_limit('TWEAK_DAILY_LIMIT', 40)}/day",
+        "profile_parse": f"{_daily_limit('PARSE_DAILY_LIMIT', 5)}/day",
         "auth": "10/hour",
         "logout": "60/hour",
     },

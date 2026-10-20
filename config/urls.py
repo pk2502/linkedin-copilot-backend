@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.views import ProfileView
+from ai.profile_import import ProfileParseView
 from config.views import database_health_check, health_check
 
 urlpatterns = [
@@ -11,6 +12,7 @@ urlpatterns = [
 
     path("api/auth/", include("accounts.urls")),
     path("api/profile/", ProfileView.as_view(), name="profile"),
+    path("api/profile/parse/", ProfileParseView.as_view(), name="profile_parse"),
     path("api/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 

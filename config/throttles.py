@@ -9,6 +9,10 @@ class TweakRateThrottle(UserRateThrottle):
     scope = "tweak"
 
 
+class ProfileParseRateThrottle(UserRateThrottle):
+    scope = "profile_parse"
+
+
 class AuthRateThrottle(AnonRateThrottle):
     scope = "auth"
 

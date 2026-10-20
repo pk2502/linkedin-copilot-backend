@@ -64,6 +64,7 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | Sync and streaming generation, prompts, tone, auth, throttling | `ai/tests.py` |
 | History list, search, delete, per-user isolation | `generations/tests.py` |
 | Drafts, variants, tweaks, prompt rules, profile use | `ai/test_drafts.py` |
+| Resume / PDF import into profile fields | `ai/test_profile_import.py` |
 
 
 ## Dependencies
@@ -80,6 +81,7 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | POST | `/api/auth/logout/` | none (body `{"refresh": ...}`; revokes that refresh token, access tokens expire within 30 min) |
 | GET | `/api/auth/me/` | Bearer |
 | GET, PUT | `/api/profile/` | Bearer (the user's profile: headline, summary, skills, target roles, experience, writing sample; `completeness` 0-100) |
+| POST | `/api/profile/parse/` | Bearer (`{text}` or multipart `{file}` PDF up to 2 MB -> suggested headline, summary, skills, target roles, experience; nothing saved; `PARSE_DAILY_LIMIT`, default 5/day) |
 | POST | `/api/drafts/` | Bearer (`{type, tone?, ...fields, recipient_context?, job_description?}` → `{id, variants: [3 drafts]}`; counts once toward the daily limit. `recipient_context` (≤4000, any type) and `job_description` (≤6000, referrals) are used for the prompt only and never stored) |
 | POST | `/api/drafts/<id>/tweak/` | Bearer (`{variant: 0-2, instruction: shorter\|warmer\|more_specific\|more_formal}` → `{id, text}`; separate daily limit) |
 | POST | `/api/auth/social/google/` | none |
