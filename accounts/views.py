@@ -6,7 +6,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenBlacklistView
 from config.throttles import AuthRateThrottle, LogoutRateThrottle
 
-from accounts.serializers import RegisterSerializer, UserSerializer
+from accounts.models import Profile
+from accounts.serializers import ProfileSerializer, RegisterSerializer, UserSerializer
 
 
 class RegisterView(APIView):
@@ -57,3 +58,22 @@ class LogoutView(TokenBlacklistView):
     """
 
     throttle_classes = [LogoutRateThrottle]
+
+
+class ProfileView(APIView):
+    """GET or PUT the signed-in user's profile. PUT replaces all fields;
+    omitted fields become empty."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        return Response(ProfileSerializer(profile).data)
+
+    def put(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        data = {field: request.data.get(field, "") for field in Profile.LIMITS}
+        serializer = ProfileSerializer(profile, data=data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

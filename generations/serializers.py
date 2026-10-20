@@ -6,5 +6,5 @@ from generations.models import Generation
 class GenerationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Generation
-        fields = ["id", "generation_type", "input_data", "output", "created_at"]
+        fields = ["id", "generation_type", "input_data", "output", "variants", "parent", "created_at"]
         read_only_fields = ["id", "created_at"]

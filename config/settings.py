@@ -379,6 +379,20 @@ STORAGES = {
 }
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+def _daily_limit(name, default):
+    """Positive integer from the environment, so limits can change without a deploy."""
+    raw = os.environ.get(name, '').strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f'{name} must be a whole number.') from exc
+    if value < 1:
+        raise ImproperlyConfigured(f'{name} must be at least 1.')
+    return value
+
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -390,7 +404,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "10/hour",
         "user": "100/day",
-        "generate": "20/day",
+        "generate": f"{_daily_limit('GENERATE_DAILY_LIMIT', 20)}/day",
+        "tweak": f"{_daily_limit('TWEAK_DAILY_LIMIT', 40)}/day",
         "auth": "10/hour",
         "logout": "60/hour",
     },

@@ -37,6 +37,8 @@ Set these in the Render service's Environment page. Do not commit their values o
 | `SECRET_KEY` | Required | A newly generated random value of at least 50 characters. Store it as a Render secret; do not reuse a development key. |
 | `ALLOWED_HOSTS` | Required | The exact Render hostname, for example `your-service.onrender.com`, without scheme or path. |
 | `DATABASE_URL` | Required, recommended | Supabase PostgreSQL connection URI. The password must be URI-encoded if it contains reserved characters. TLS is required; `sslmode=require` is applied by default. |
+| `GENERATE_DAILY_LIMIT` | Optional | Draft requests per user per day (default 20). Applies to `/api/drafts/` and the original `/api/generate/` endpoints together. |
+| `TWEAK_DAILY_LIMIT` | Optional | Tweaks per user per day (default 40). |
 | `GROQ_API_KEY` | Required | The production Groq API key stored as a Render secret. Startup rejects missing or obvious placeholder values. |
 | `GROQ_MODEL` | Optional | Groq model ID. Defaults to `openai/gpt-oss-120b`. Set it to switch models without a code change when Groq retires one (see console.groq.com/docs/deprecations). |
 | `CORS_ALLOWED_ORIGINS` | Required when enabling extension CORS | Exact comma-separated browser origins. Set `https://connect-pilot.vercel.app` and, after obtaining the published extension ID, `chrome-extension://<extension-id>`. Do not include a trailing slash. |

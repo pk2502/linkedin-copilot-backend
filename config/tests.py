@@ -209,6 +209,21 @@ class ProductionSettingsHardeningTests(SimpleTestCase):
                 with self.assertRaises(ImproperlyConfigured):
                     self._reload_settings(CORS_ALLOWED_ORIGIN_REGEXES=pattern)
 
+    def test_daily_limits_default_and_can_be_configured(self):
+        default = self._reload_settings(GENERATE_DAILY_LIMIT="", TWEAK_DAILY_LIMIT="")
+        rates = default.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+        self.assertEqual((rates["generate"], rates["tweak"]), ("20/day", "40/day"))
+
+        custom = self._reload_settings(GENERATE_DAILY_LIMIT="50", TWEAK_DAILY_LIMIT="100")
+        rates = custom.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+        self.assertEqual((rates["generate"], rates["tweak"]), ("50/day", "100/day"))
+
+    def test_daily_limits_reject_invalid_values(self):
+        for value in ("abc", "0", "-5"):
+            with self.subTest(value=value):
+                with self.assertRaises(ImproperlyConfigured):
+                    self._reload_settings(GENERATE_DAILY_LIMIT=value)
+
     def test_existing_api_routes_remain_unchanged(self):
         route_names = {
             "/api/auth/login/": "token_obtain_pair",

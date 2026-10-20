@@ -51,6 +51,8 @@ python manage.py test
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push and pull request.
 
+To judge prompt quality, `python scripts/eval_drafts.py [--compare]` drafts messages for five fictional recipients and flags banned phrases. It makes **real, billed Groq calls** and needs `GROQ_API_KEY`; it is never run by CI or the test suite.
+
 Tests never call the real Groq API: generation tests replace the client with a fake and fail if a real one is constructed.
 
 The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django creates and drops a temporary `test_<DB_NAME>` database, so the database user needs the `CREATEDB` privilege. A guard test fails if the backend is not PostgreSQL.
@@ -61,6 +63,7 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | Register, login, refresh rotation and blacklisting, `/me` | `accounts/tests.py` |
 | Sync and streaming generation, prompts, tone, auth, throttling | `ai/tests.py` |
 | History list, search, delete, per-user isolation | `generations/tests.py` |
+| Drafts, variants, tweaks, prompt rules, profile use | `ai/test_drafts.py` |
 
 
 ## Dependencies
@@ -76,9 +79,12 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | POST | `/api/auth/refresh/` | none |
 | POST | `/api/auth/logout/` | none (body `{"refresh": ...}`; revokes that refresh token, access tokens expire within 30 min) |
 | GET | `/api/auth/me/` | Bearer |
+| GET, PUT | `/api/profile/` | Bearer (the user's profile: headline, summary, skills, target roles, experience, writing sample; `completeness` 0-100) |
+| POST | `/api/drafts/` | Bearer (`{type, tone?, ...fields}` → `{id, variants: [3 drafts]}`; counts once toward the daily limit) |
+| POST | `/api/drafts/<id>/tweak/` | Bearer (`{variant: 0-2, instruction: shorter\|warmer\|more_specific\|more_formal}` → `{id, text}`; separate daily limit) |
 | POST | `/api/auth/social/google/` | none |
 | POST | `/api/auth/extension-token/` | Bearer (issues a separate token pair for the browser extension) |
-| POST | `/api/generate/{connection-request,referral-request,recruiter-reply,followup}/` | Bearer |
+| POST | `/api/generate/{connection-request,referral-request,recruiter-reply,followup}/` | Bearer (original single-draft endpoints, kept for older clients) |
 | POST | `/api/generate/stream/{same four}/` | Bearer (SSE) |
 
 Generation requests are validated: every field is required and trimmed, short fields (names, company, role, job title) allow 150 characters, `your_background` and `context` 2000, `interest_level` is one of `very interested` / `somewhat interested` / `not interested`, and `days_since` is a whole number from 0 to 3650. Invalid requests return 400 and do not count toward the daily limit. If the AI provider fails, the endpoints return 502 `{"error": ...}`; a stream that fails part-way ends with a `data: {"error": ...}` event instead of `[DONE]`, and nothing is saved to history.

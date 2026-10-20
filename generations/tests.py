@@ -57,7 +57,7 @@ class HistoryAPITests(APITestCase):
         self.assertEqual([item["id"] for item in response.data], [newer.id, older.id])
         self.assertEqual(
             set(response.data[0]),
-            {"id", "generation_type", "input_data", "output", "created_at"},
+            {"id", "generation_type", "input_data", "output", "variants", "parent", "created_at"},
         )
 
     def test_list_excludes_other_users_generations(self):
@@ -129,3 +129,21 @@ class HistoryAPITests(APITestCase):
         self.assertEqual(list_response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(delete_response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertTrue(Generation.objects.filter(pk=generation.pk).exists())
+
+
+class RollingDeployCompatibilityTests(APITestCase):
+    def test_insert_without_new_columns_still_works(self):
+        # Code deployed before the variants/parent migration does not send these
+        # columns; the database default must cover them during a rollout.
+        user = User.objects.create_user(username="carol", password="correct-horse-battery-staple")
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO generations_generation (user_id, generation_type, input_data, output, created_at) "
+                "VALUES (%s, 'followup', '{}'::jsonb, 'old row', NOW()) RETURNING id",
+                [user.id],
+            )
+            pk = cursor.fetchone()[0]
+
+        generation = Generation.objects.get(pk=pk)
+        self.assertEqual(generation.variants, [])
+        self.assertIsNone(generation.parent)

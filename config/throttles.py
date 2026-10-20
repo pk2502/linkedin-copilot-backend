@@ -5,6 +5,10 @@ class GenerateRateThrottle(UserRateThrottle):
     scope = "generate"
 
 
+class TweakRateThrottle(UserRateThrottle):
+    scope = "tweak"
+
+
 class AuthRateThrottle(AnonRateThrottle):
     scope = "auth"
 

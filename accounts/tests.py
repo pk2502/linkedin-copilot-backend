@@ -274,3 +274,62 @@ class LogoutTests(AuthTestCase):
         login = self.client.post(LOGIN_URL, {"username": "alice", "password": PASSWORD}, format="json")
 
         self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+
+class ProfileTests(AuthTestCase):
+    URL = "/api/profile/"
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="alice", password=PASSWORD)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(self.user).access_token}")
+
+    def test_requires_authentication(self):
+        self.client.credentials()
+
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_new_user_gets_an_empty_profile(self):
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["summary"], "")
+        self.assertEqual(response.data["completeness"], 0)
+
+    def test_put_saves_trimmed_fields_and_reports_completeness(self):
+        response = self.client.put(
+            self.URL,
+            {"headline": "  Frontend Lead  ", "experience": "Built a design system.", "summary": "8 years of React."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["headline"], "Frontend Lead")
+        self.assertEqual(response.data["completeness"], 15 + 30 + 20)
+        self.assertEqual(self.client.get(self.URL).data["headline"], "Frontend Lead")
+
+    def test_put_replaces_all_fields(self):
+        self.client.put(self.URL, {"headline": "A", "skills": "React"}, format="json")
+
+        response = self.client.put(self.URL, {"headline": "B"}, format="json")
+
+        self.assertEqual(response.data["headline"], "B")
+        self.assertEqual(response.data["skills"], "")
+
+    def test_rejects_overlong_fields(self):
+        response = self.client.put(self.URL, {"experience": "x" * 4001}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("experience", response.data)
+
+    def test_ignores_unknown_and_read_only_fields(self):
+        response = self.client.put(self.URL, {"completeness": 100, "user": 999, "headline": "A"}, format="json")
+
+        self.assertEqual(response.data["completeness"], 15)
+
+    def test_profiles_are_private(self):
+        self.client.put(self.URL, {"headline": "Alice"}, format="json")
+        bob = User.objects.create_user(username="bob", password=PASSWORD)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(bob).access_token}")
+
+        self.assertEqual(self.client.get(self.URL).data["headline"], "")

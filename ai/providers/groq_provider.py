@@ -1,3 +1,4 @@
+import json
 import os
 from groq import Groq
 from typing import Generator
@@ -172,3 +173,36 @@ def stream_recruiter_reply(recruiter_name, company, job_title, your_background, 
 
 def stream_followup(name, company, role, context, days_since, sender_name="", tone="friendly"):
     return _stream_chat(_build_followup_prompt(name, company, role, context, days_since, sender_name, tone))
+
+
+# --- Structured output (drafts and tweaks) ---
+
+class ProviderResponseError(Exception):
+    """The model answered, but not in the requested format."""
+
+
+def structured_chat(messages, schema, schema_name, max_completion_tokens=1500):
+    """Run a chat completion constrained to a JSON schema and return the parsed object.
+
+    Groq supports strict structured outputs for the gpt-oss models; streaming is
+    not available in this mode.
+    """
+    model = _model()
+    options = {
+        "model": model,
+        "messages": messages,
+        "max_completion_tokens": max_completion_tokens,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": schema_name, "strict": True, "schema": schema},
+        },
+    }
+    if model.startswith("openai/gpt-oss"):
+        options["reasoning_effort"] = "low"
+        options["include_reasoning"] = False
+    response = _get_client().chat.completions.create(**options)
+    content = response.choices[0].message.content or ""
+    try:
+        return json.loads(content)
+    except ValueError as exc:
+        raise ProviderResponseError("Model returned invalid JSON") from exc

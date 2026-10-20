@@ -59,3 +59,30 @@ class FollowupSerializer(GenerationRequestSerializer):
     role = short_text()
     context = long_text()
     days_since = serializers.IntegerField(min_value=0, max_value=3650)
+
+
+# --- /api/drafts/ ---
+# Same fields as the original endpoints, except that your_background is
+# optional: the saved profile supplies it when left empty.
+
+class DraftReferralSerializer(ReferralRequestSerializer):
+    your_background = serializers.CharField(max_length=LONG_TEXT, required=False, allow_blank=True)
+
+
+class DraftRecruiterSerializer(RecruiterReplySerializer):
+    your_background = serializers.CharField(max_length=LONG_TEXT, required=False, allow_blank=True)
+
+
+DRAFT_SERIALIZERS = {
+    "connection_request": ConnectionRequestSerializer,
+    "referral_request": DraftReferralSerializer,
+    "recruiter_reply": DraftRecruiterSerializer,
+    "followup": FollowupSerializer,
+}
+
+NEEDS_BACKGROUND = {"referral_request", "recruiter_reply"}
+
+
+class TweakSerializer(serializers.Serializer):
+    variant = serializers.IntegerField(min_value=0, max_value=2)
+    instruction = serializers.ChoiceField(choices=("shorter", "warmer", "more_specific", "more_formal"))
