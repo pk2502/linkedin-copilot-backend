@@ -72,6 +72,11 @@ Rules:
 - Never use these phrases or close variants: {"; ".join(BANNED_PHRASES)}.
 - If a writing sample is provided, match its voice (sentence length, formality, vocabulary)
   without copying its content.
+- If the recipient's profile text is provided, look for genuine common ground with the sender
+  (same school, past employer, field, skills, interests) and mention at most one or two such
+  points naturally. Only claim common ground that is clearly supported by both sides' data.
+- If a job posting is provided, connect the sender's two strongest relevant qualifications to
+  specific requirements of that job. Do not quote the posting at length.
 - Return exactly three distinct drafts, each following its assigned angle.
 """
 
@@ -129,8 +134,11 @@ def _sender(profile, sender_name, background_override=""):
     return sender
 
 
-def build_draft_messages(generation_type, fields, tone, sender_name, profile=None):
-    """Chat messages for three drafts. `fields` are the validated request fields."""
+def build_draft_messages(
+    generation_type, fields, tone, sender_name, profile=None, recipient_context="", job_description=""
+):
+    """Chat messages for three drafts. `fields` are the validated request fields
+    (without the page-context fields, which are passed separately)."""
     fields = dict(fields)
     background_override = fields.pop("your_background", "") or ""
     data = {
@@ -140,6 +148,10 @@ def build_draft_messages(generation_type, fields, tone, sender_name, profile=Non
     }
     if profile is not None and profile.writing_sample.strip():
         data["sender_writing_sample"] = profile.writing_sample.strip()
+    if recipient_context.strip():
+        data["recipient_profile_text"] = recipient_context.strip()
+    if job_description.strip():
+        data["job_posting"] = job_description.strip()
 
     angles = "\n".join(f"Draft {i + 1}: {angle}" for i, angle in enumerate(ANGLES))
     user = (

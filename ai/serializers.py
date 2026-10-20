@@ -62,22 +62,48 @@ class FollowupSerializer(GenerationRequestSerializer):
 
 
 # --- /api/drafts/ ---
-# Same fields as the original endpoints, except that your_background is
-# optional: the saved profile supplies it when left empty.
+# Same fields as the original endpoints, plus optional page context. your_background
+# is optional: the saved profile supplies it when left empty.
+# recipient_context and job_description are used for the prompt only and are
+# never stored (see EPHEMERAL_FIELDS).
 
-class DraftReferralSerializer(ReferralRequestSerializer):
-    your_background = serializers.CharField(max_length=LONG_TEXT, required=False, allow_blank=True)
+RECIPIENT_CONTEXT_MAX = 4000
+JOB_DESCRIPTION_MAX = 6000
+EPHEMERAL_FIELDS = ("recipient_context", "job_description")
 
 
-class DraftRecruiterSerializer(RecruiterReplySerializer):
-    your_background = serializers.CharField(max_length=LONG_TEXT, required=False, allow_blank=True)
+def optional_text(max_length):
+    return serializers.CharField(max_length=max_length, required=False, allow_blank=True)
+
+
+class RecipientContextMixin(serializers.Serializer):
+    # Visible text from the recipient's LinkedIn profile (About, experience,
+    # education), read by the extension when the user opens it.
+    recipient_context = optional_text(RECIPIENT_CONTEXT_MAX)
+
+
+class DraftConnectionSerializer(RecipientContextMixin, ConnectionRequestSerializer):
+    pass
+
+
+class DraftReferralSerializer(RecipientContextMixin, ReferralRequestSerializer):
+    your_background = optional_text(LONG_TEXT)
+    job_description = optional_text(JOB_DESCRIPTION_MAX)
+
+
+class DraftRecruiterSerializer(RecipientContextMixin, RecruiterReplySerializer):
+    your_background = optional_text(LONG_TEXT)
+
+
+class DraftFollowupSerializer(RecipientContextMixin, FollowupSerializer):
+    pass
 
 
 DRAFT_SERIALIZERS = {
-    "connection_request": ConnectionRequestSerializer,
+    "connection_request": DraftConnectionSerializer,
     "referral_request": DraftReferralSerializer,
     "recruiter_reply": DraftRecruiterSerializer,
-    "followup": FollowupSerializer,
+    "followup": DraftFollowupSerializer,
 }
 
 NEEDS_BACKGROUND = {"referral_request", "recruiter_reply"}

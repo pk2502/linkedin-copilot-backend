@@ -16,7 +16,7 @@ from ai.prompts import (
     build_tweak_messages,
 )
 from ai.providers import groq_provider
-from ai.serializers import DEFAULT_TONE, DRAFT_SERIALIZERS, NEEDS_BACKGROUND, TweakSerializer
+from ai.serializers import DEFAULT_TONE, DRAFT_SERIALIZERS, EPHEMERAL_FIELDS, NEEDS_BACKGROUND, TweakSerializer
 from ai.views import AI_UNAVAILABLE, get_sender_name
 from config.throttles import GenerateRateThrottle, TweakRateThrottle
 from generations.models import Generation
@@ -69,8 +69,15 @@ class DraftView(APIView):
 
     def post(self, request):
         tone = self.validated.pop("tone", None) or DEFAULT_TONE
+        # Page context goes to the prompt only; it is never stored in history.
+        ephemeral = {field: self.validated.pop(field, "") or "" for field in EPHEMERAL_FIELDS}
         messages = build_draft_messages(
-            self.generation_type, self.validated, tone, get_sender_name(request.user), self.profile
+            self.generation_type,
+            self.validated,
+            tone,
+            get_sender_name(request.user),
+            self.profile,
+            **ephemeral,
         )
         try:
             drafts = _clean_drafts(
