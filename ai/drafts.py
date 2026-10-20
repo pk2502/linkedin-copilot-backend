@@ -36,6 +36,11 @@ def _clean_drafts(result):
     return cleaned
 
 
+def request_source(request):
+    """"extension" when the browser extension says so in the body, else "web"."""
+    return "extension" if request.data.get("client") == "extension" else "web"
+
+
 def _unavailable():
     return Response({"error": AI_UNAVAILABLE}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -93,6 +98,7 @@ class DraftView(APIView):
             input_data={**self.validated, "tone": tone},
             output=drafts[0],
             variants=drafts,
+            source=request_source(request),
         )
         return Response({"id": generation.id, "variants": drafts}, status=status.HTTP_201_CREATED)
 
@@ -138,5 +144,6 @@ class TweakView(APIView):
             output=text,
             variants=[text],
             parent=root,
+            source=request_source(request),
         )
         return Response({"id": generation.id, "text": text}, status=status.HTTP_201_CREATED)

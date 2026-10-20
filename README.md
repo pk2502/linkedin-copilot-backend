@@ -65,6 +65,7 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | History list, search, delete, per-user isolation | `generations/tests.py` |
 | Drafts, variants, tweaks, prompt rules, profile use | `ai/test_drafts.py` |
 | Resume / PDF import into profile fields | `ai/test_profile_import.py` |
+| First-run checklist, draft source | `generations/test_onboarding.py`, `ai/test_drafts.py` |
 
 
 ## Dependencies
@@ -82,7 +83,8 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | GET | `/api/auth/me/` | Bearer |
 | GET, PUT | `/api/profile/` | Bearer (the user's profile: headline, summary, skills, target roles, experience, writing sample; `completeness` 0-100) |
 | POST | `/api/profile/parse/` | Bearer (`{text}` or multipart `{file}` PDF up to 2 MB -> suggested headline, summary, skills, target roles, experience; nothing saved; `PARSE_DAILY_LIMIT`, default 5/day) |
-| POST | `/api/drafts/` | Bearer (`{type, tone?, ...fields, recipient_context?, job_description?}` → `{id, variants: [3 drafts]}`; counts once toward the daily limit. `recipient_context` (≤4000, any type), `job_description` (≤6000, referrals) and `conversation` (≤4000, recruiter replies and follow-ups; then only the name, and for recruiter replies the interest level, are required) are used for the prompt only and never stored) |
+| POST | `/api/drafts/` | Bearer (`{type, tone?, ...fields, recipient_context?, job_description?}` → `{id, variants: [3 drafts]}`; counts once toward the daily limit. `recipient_context` (≤4000, any type), `job_description` (≤6000, referrals) and `conversation` (≤4000, recruiter replies and follow-ups; then only the name, and for recruiter replies the interest level, are required) are used for the prompt only and never stored. Optional `client: "extension"` marks the draft's `source`) |
+| GET | `/api/onboarding/` | Bearer (first-run checklist: `{profile_completeness, has_draft, used_extension}`) |
 | POST | `/api/drafts/<id>/tweak/` | Bearer (`{variant: 0-2, instruction: shorter\|warmer\|more_specific\|more_formal}` → `{id, text}`; separate daily limit) |
 | POST | `/api/auth/social/google/` | none |
 | POST | `/api/auth/extension-token/` | Bearer (issues a separate token pair for the browser extension) |

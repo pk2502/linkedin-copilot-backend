@@ -418,3 +418,26 @@ class ConversationTests(DraftTestCase):
     def test_today_is_only_added_with_a_conversation(self):
         self.draft("followup")
         self.assertNotIn('"today"', self.fake.last_user_message)
+
+
+class SourceTests(DraftTestCase):
+    def test_drafts_from_the_web_app_are_marked_web(self):
+        self.draft("connection_request")
+        self.assertEqual(Generation.objects.get().source, "web")
+
+    def test_extension_drafts_and_their_tweaks_are_marked_extension(self):
+        response = self.draft("connection_request", client="extension")
+        self.assertEqual(Generation.objects.get().source, "extension")
+        self.assertNotIn("client", Generation.objects.get().input_data)
+
+        self.fake.replies = [{"text": "Shorter."}]
+        self.client.post(
+            f"{DRAFTS_URL}{response.json()['id']}/tweak/",
+            {"variant": 0, "instruction": "shorter", "client": "extension"},
+            format="json",
+        )
+        self.assertEqual(Generation.objects.latest("id").source, "extension")
+
+    def test_unknown_client_values_count_as_web(self):
+        self.draft("connection_request", client="something-else")
+        self.assertEqual(Generation.objects.get().source, "web")

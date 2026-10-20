@@ -3,6 +3,7 @@ from django.urls import include, path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.views import ProfileView
 from ai.profile_import import ProfileParseView
+from generations.views import OnboardingView
 from config.views import database_health_check, health_check
 
 urlpatterns = [
@@ -24,4 +25,5 @@ urlpatterns = [
     path("api/generate/", include("ai.urls")),
     path("api/drafts/", include("ai.draft_urls")),
     path("api/history/", include("generations.urls")),
+    path("api/onboarding/", OnboardingView.as_view(), name="onboarding"),
 ]

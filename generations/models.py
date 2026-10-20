@@ -18,6 +18,10 @@ class Generation(models.Model):
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="tweaks"
     )
+    # Where the request came from: the web app or the browser extension.
+    # db_default keeps older code's inserts working during a rolling deploy.
+    SOURCES = [("web", "Web app"), ("extension", "Extension")]
+    source = models.CharField(max_length=16, choices=SOURCES, default="web", db_default="web")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
