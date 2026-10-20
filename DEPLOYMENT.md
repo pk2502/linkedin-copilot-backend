@@ -39,8 +39,8 @@ Set these in the Render service's Environment page. Do not commit their values o
 | `DATABASE_URL` | Required, recommended | Supabase PostgreSQL connection URI. The password must be URI-encoded if it contains reserved characters. TLS is required; `sslmode=require` is applied by default. |
 | `GROQ_API_KEY` | Required | The production Groq API key stored as a Render secret. Startup rejects missing or obvious placeholder values. |
 | `GROQ_MODEL` | Optional | Groq model ID. Defaults to `openai/gpt-oss-120b`. Set it to switch models without a code change when Groq retires one (see console.groq.com/docs/deprecations). |
-| `CORS_ALLOWED_ORIGINS` | Required when enabling extension CORS | Exact comma-separated browser origins. Set `https://li-copilot.vercel.app` and, after obtaining the published extension ID, `chrome-extension://<extension-id>`. Do not include a trailing slash. |
-| `CSRF_TRUSTED_ORIGINS` | Required if overriding the default | Exact web origins that submit Django session/CSRF-protected requests. Start with `https://li-copilot.vercel.app`; the JWT-only extension does not need to be added here. |
+| `CORS_ALLOWED_ORIGINS` | Required when enabling extension CORS | Exact comma-separated browser origins. Set `https://connect-pilot.vercel.app` and, after obtaining the published extension ID, `chrome-extension://<extension-id>`. Do not include a trailing slash. |
+| `CSRF_TRUSTED_ORIGINS` | Required if overriding the default | Exact web origins that submit Django session/CSRF-protected requests. Start with `https://connect-pilot.vercel.app`; the JWT-only extension does not need to be added here. |
 | `GOOGLE_CLIENT_ID` | Optional | Required only if Google sign-in is enabled. |
 | `GOOGLE_CLIENT_SECRET` | Optional | Required only if Google sign-in is enabled. |
 
@@ -56,7 +56,7 @@ The Ollama provider module is dormant: the active generation service imports the
 
 ## Origins and client compatibility
 
-The backend's production CORS and CSRF defaults include the frontend origin `https://li-copilot.vercel.app`. The API uses `Authorization: Bearer ...` JWTs, not cookies, so CSRF settings do not affect the frontend or the extension.
+The backend's production CORS and CSRF defaults include the frontend origin `https://connect-pilot.vercel.app` and the previous domain `https://li-copilot.vercel.app`, which now redirects to it. The API uses `Authorization: Bearer ...` JWTs, not cookies, so CSRF settings do not affect the frontend or the extension.
 
 The frontend reads `NEXT_PUBLIC_API_URL` (Vercel Config variable, no trailing slash). Its fallback is `http://localhost:8001`, so every Vercel environment that should reach the API needs the variable set.
 

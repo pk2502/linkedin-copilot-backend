@@ -22,8 +22,8 @@ class ProductionSettingsHardeningTests(SimpleTestCase):
             "DB_HOST": "db.example.com",
             "DB_PORT": "5432",
             "GROQ_API_KEY": "test-groq-key",
-            "CORS_ALLOWED_ORIGINS": "https://li-copilot.vercel.app",
-            "CSRF_TRUSTED_ORIGINS": "https://li-copilot.vercel.app",
+            "CORS_ALLOWED_ORIGINS": "https://connect-pilot.vercel.app",
+            "CSRF_TRUSTED_ORIGINS": "https://connect-pilot.vercel.app",
         }
         environment.update(env_overrides)
         with mock.patch.dict(os.environ, environment, clear=False):

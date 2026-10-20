@@ -243,10 +243,12 @@ else:
         }
     }
 
+# li-copilot.vercel.app is the previous frontend domain; it now redirects to
+# connect-pilot.vercel.app and stays allowed while old tabs and links age out.
 _default_origins = (
-    'https://li-copilot.vercel.app'
+    'https://connect-pilot.vercel.app,https://li-copilot.vercel.app'
     if IS_PRODUCTION
-    else 'https://li-copilot.vercel.app,http://localhost:3000,http://127.0.0.1:3000'
+    else 'https://connect-pilot.vercel.app,https://li-copilot.vercel.app,http://localhost:3000,http://127.0.0.1:3000'
 )
 CORS_ALLOWED_ORIGINS = _as_csv(
     os.environ.get('CORS_ALLOWED_ORIGINS', _default_origins)
