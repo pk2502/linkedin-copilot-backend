@@ -66,6 +66,7 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | Drafts, variants, tweaks, prompt rules, profile use | `ai/test_drafts.py` |
 | Resume / PDF import into profile fields | `ai/test_profile_import.py` |
 | Outreach tracker | `contacts/tests.py` |
+| Sign in with LinkedIn (mocked) | `accounts/test_linkedin.py` |
 | First-run checklist, draft source | `generations/test_onboarding.py`, `ai/test_drafts.py` |
 
 
@@ -92,6 +93,7 @@ The suite runs against PostgreSQL using the `DB_*` settings from `.env`. Django 
 | POST | `/api/contacts/touch/` | Bearer (extension events: `{linkedin_url, name?, company?, role?, event: sent\|replied}`; replies from people never contacted are ignored with 204) |
 | POST | `/api/drafts/<id>/tweak/` | Bearer (`{variant: 0-2, instruction: shorter\|warmer\|more_specific\|more_formal}` → `{id, text}`; separate daily limit) |
 | POST | `/api/auth/social/google/` | none |
+| POST | `/api/auth/social/linkedin/` | none (`{code, redirect_uri}` from the web app's LinkedIn callback → `{access, refresh, user}`; signs into an existing account with the same verified email; 503 until `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET` are set) |
 | POST | `/api/auth/extension-token/` | Bearer (issues a separate token pair for the browser extension) |
 | POST | `/api/generate/{connection-request,referral-request,recruiter-reply,followup}/` | Bearer (original single-draft endpoints, kept for older clients) |
 | POST | `/api/generate/stream/{same four}/` | Bearer (SSE) |

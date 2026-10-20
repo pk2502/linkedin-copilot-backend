@@ -45,6 +45,9 @@ Set these in the Render service's Environment page. Do not commit their values o
 | `CSRF_TRUSTED_ORIGINS` | Required if overriding the default | Exact web origins that submit Django session/CSRF-protected requests. Start with `https://connect-pilot.vercel.app`; the JWT-only extension does not need to be added here. |
 | `GOOGLE_CLIENT_ID` | Optional | Required only if Google sign-in is enabled. |
 | `GOOGLE_CLIENT_SECRET` | Optional | Required only if Google sign-in is enabled. |
+| `LINKEDIN_CLIENT_ID` | Optional | LinkedIn app client ID. With the secret, enables Sign in with LinkedIn. |
+| `LINKEDIN_CLIENT_SECRET` | Optional | LinkedIn app client secret. |
+| `LINKEDIN_REDIRECT_URIS` | Optional | Comma-separated callback URLs allowed for LinkedIn sign-in. Default: `https://connect-pilot.vercel.app/auth/linkedin/callback,http://localhost:3000/auth/linkedin/callback`. |
 
 Instead of `DATABASE_URL`, production can use all of `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and `DB_HOST`, with optional `DB_PORT` (default `5432`). Those connections also require TLS. Do not set `DATABASE_URL` and individual database variables expecting them to merge; `DATABASE_URL` takes precedence.
 

@@ -316,6 +316,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.openid_connect',
 
     # dj-rest-auth
     'dj_rest_auth',
@@ -444,8 +445,37 @@ SOCIALACCOUNT_PROVIDERS = {
         'SCOPE': ['profile', 'email'],
         'AUTH_PARAMS': {'access_type': 'online'},
         'FETCH_USERINFO': True,
-    }
+    },
 }
+
+# Sign In with LinkedIn using OpenID Connect. Off until both values are set;
+# /api/auth/social/linkedin/ then answers 503 and the web app hides the button.
+LINKEDIN_CLIENT_ID = os.environ.get('LINKEDIN_CLIENT_ID', '').strip()
+LINKEDIN_CLIENT_SECRET = os.environ.get('LINKEDIN_CLIENT_SECRET', '').strip()
+# Where LinkedIn may send users back to (the web app's callback page).
+LINKEDIN_REDIRECT_URIS = [
+    uri.strip()
+    for uri in os.environ.get(
+        'LINKEDIN_REDIRECT_URIS',
+        'https://connect-pilot.vercel.app/auth/linkedin/callback,http://localhost:3000/auth/linkedin/callback',
+    ).split(',')
+    if uri.strip()
+]
+if LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET:
+    SOCIALACCOUNT_PROVIDERS['openid_connect'] = {
+        'APPS': [
+            {
+                'provider_id': 'linkedin',
+                'name': 'LinkedIn',
+                'client_id': LINKEDIN_CLIENT_ID,
+                'secret': LINKEDIN_CLIENT_SECRET,
+                'settings': {
+                    'server_url': 'https://www.linkedin.com/oauth',
+                    'token_auth_method': 'client_secret_post',
+                },
+            }
+        ]
+    }
 
 REST_AUTH = {
     'USE_JWT': True,
